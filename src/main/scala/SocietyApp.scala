@@ -1,4 +1,3 @@
-import State.globalContext
 import korolev.Router.Root
 import korolev.state.StateStorage
 import korolev.server._
@@ -6,18 +5,20 @@ import korolev.blazeServer._
 import korolev.execution._
 import korolev.state.javaSerialization._
 import korolev._
+import states.{SocietyState, State}
+import states.State._
 
 import scala.concurrent.Future
 
 //noinspection TypeAnnotation
-object SocietyEvents extends KorolevBlazeServer {
+object SocietyApp extends KorolevBlazeServer {
 
   import State.globalContext._
   import State.globalContext.symbolDsl._
 
-  val storage: StateStorage[Future, State] = StateStorage.default[Future, State](State())
-  val inputId: globalContext.ElementId     = elementId()
-
+  val storage: StateStorage[Future, SocietyState] =
+    StateStorage.default[Future, SocietyState](State())
+  val inputId: globalContext.ElementId = elementId()
 
   private val pageHead = Seq(
     'title ("Russian Scala Society Events"),
@@ -29,14 +30,14 @@ object SocietyEvents extends KorolevBlazeServer {
   )
 
   private val renderer: Render = {
-    case state =>
+    case state: State =>
       'body (
         'div ("Super TODO tracker"),
         'div (
           state.todos.keys map { name =>
             'a (
               event('click) { access =>
-                access.transition(_.copy(selectedTab = name))
+                access.transition { case x: State => x.copy(selectedTab = name) }
               },
               'href /= "/" + name.toLowerCase,
               disableHref,
@@ -58,10 +59,11 @@ object SocietyEvents extends KorolevBlazeServer {
                   },
                   // Generate transition when clicking checkboxes
                   event('click) { access =>
-                    access.transition { s =>
-                      val todos = s.todos(s.selectedTab)
-                      val updated = todos.updated(i, todos(i).copy(done = !todo.done))
-                      s.copy(todos = s.todos + (s.selectedTab -> updated))
+                    access.transition {
+                      case s: State =>
+                        val todos   = s.todos(s.selectedTab)
+                        val updated = todos.updated(i, todos(i).copy(done = !todo.done))
+                        s.copy(todos = s.todos + (s.selectedTab -> updated))
                     }
                   }
                 ),
@@ -75,8 +77,9 @@ object SocietyEvents extends KorolevBlazeServer {
           event('submit) { access =>
             access.property(inputId, 'value) flatMap { value =>
               val todo = State.Todo(value, done = false)
-              access.transition { s =>
-                s.copy(todos = s.todos + (s.selectedTab -> (s.todos(s.selectedTab) :+ todo)))
+              access.transition {
+                case s: State =>
+                  s.copy(todos = s.todos + (s.selectedTab -> (s.todos(s.selectedTab) :+ todo)))
               }
             }
           },
@@ -90,7 +93,9 @@ object SocietyEvents extends KorolevBlazeServer {
       )
   }
 
-  val service = blazeService[Future, State, Any] from KorolevServiceConfig[Future, State, Any](
+  val service = blazeService[Future, SocietyState, Any] from KorolevServiceConfig[Future,
+                                                                                  SocietyState,
+                                                                                  Any](
     stateStorage = storage,
     head = pageHead,
     render = renderer,
@@ -101,18 +106,19 @@ object SocietyEvents extends KorolevBlazeServer {
             Root / tab.toLowerCase
         },
         toState = {
-          case (Some(s), Root) =>
+          case (Some(s: State), Root) =>
             val u = s.copy(selectedTab = s.todos.keys.head)
             Future.successful(u)
-          case (Some(s), Root / name) =>
+          case (Some(s: State), Root / name) =>
             val key = s.todos.keys.find(_.toLowerCase == name)
             Future.successful(key.fold(s)(k => s.copy(selectedTab = k)))
           case (None, Root) =>
             storage.createTopLevelState(deviceId)
           case (None, Root / name) =>
-            storage.createTopLevelState(deviceId) map { s =>
-              val key = s.todos.keys.find(_.toLowerCase == name)
-              key.fold(s)(k => s.copy(selectedTab = k))
+            storage.createTopLevelState(deviceId) map {
+              case s: State =>
+                val key = s.todos.keys.find(_.toLowerCase == name)
+                key.fold(s)(k => s.copy(selectedTab = k))
             }
         }
       )

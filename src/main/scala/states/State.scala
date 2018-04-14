@@ -1,7 +1,12 @@
+package states
+
 import korolev.Context
 import korolev.execution._
-import scala.concurrent.Future
 import korolev.state.javaSerialization._
+
+import scala.concurrent.Future
+
+trait SocietyState
 
 case class State(
   selectedTab: String = "Tab1",
@@ -10,10 +15,10 @@ case class State(
     "Tab2" -> State.Todo(7),
     "Tab3" -> State.Todo(2)
   )
-)
+) extends SocietyState
 
 object State {
-  val globalContext = Context[Future, State, Any]
+  val globalContext = Context[Future, SocietyState, Any]
   case class Todo(text: String, done: Boolean)
   object Todo {
     def apply(n: Int): Vector[Todo] = (0 to n).toVector map {
